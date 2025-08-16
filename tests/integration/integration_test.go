@@ -292,6 +292,12 @@ func (req *RequestWrapper) SetHeader(name, value string) *RequestWrapper {
 	return req
 }
 
+func (req *RequestWrapper) SetBody(body string) *RequestWrapper {
+	req.Request.Body = io.NopCloser(strings.NewReader(body))
+	req.Request.ContentLength = int64(len(body))
+	return req
+}
+
 func NewRequest(t testing.TB, method, urlStr string) *RequestWrapper {
 	t.Helper()
 	return NewRequestWithBody(t, method, urlStr, nil)
