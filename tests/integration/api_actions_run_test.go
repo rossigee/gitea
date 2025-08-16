@@ -6,6 +6,7 @@ package integration
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	auth_model "code.gitea.io/gitea/models/auth"
@@ -291,9 +292,8 @@ func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository)
 
 	// Test streaming logs with empty cursor request
-	req := NewRequest(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/logs", repo.FullName())).
-		AddTokenAuth(token).
-		SetBody(`{"logCursors": []}`)
+	req := NewRequestWithBody(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/logs", repo.FullName()), strings.NewReader(`{"logCursors": []}`)).
+		AddTokenAuth(token)
 	resp := MakeRequest(t, req, http.StatusOK)
 
 	// Parse response to verify structure
@@ -303,14 +303,12 @@ func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	assert.Contains(t, logResp, "stepsLog")
 
 	// Test streaming logs with cursor request
-	req = NewRequest(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/logs", repo.FullName())).
-		AddTokenAuth(token).
-		SetBody(`{"logCursors": [{"step": 0, "cursor": 0, "expanded": true}]}`)
+	req = NewRequestWithBody(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/logs", repo.FullName()), strings.NewReader(`{"logCursors": [{"step": 0, "cursor": 0, "expanded": true}]}`)).
+		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusOK)
 
 	// Test streaming logs for non-existent run
-	req = NewRequest(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/999999/logs", repo.FullName())).
-		AddTokenAuth(token).
-		SetBody(`{"logCursors": []}`)
+	req = NewRequestWithBody(t, "POST", fmt.Sprintf("/api/v1/repos/%s/actions/runs/999999/logs", repo.FullName()), strings.NewReader(`{"logCursors": []}`)).
+		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusNotFound)
 }
