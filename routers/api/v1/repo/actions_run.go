@@ -20,7 +20,6 @@ import (
 	actions_service "code.gitea.io/gitea/services/actions"
 	"code.gitea.io/gitea/services/context"
 	notify_service "code.gitea.io/gitea/services/notify"
-
 	"xorm.io/builder"
 )
 
