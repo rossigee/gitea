@@ -636,59 +636,6 @@ func GetWorkflowRunLogs(ctx *context.APIContext) {
 	}
 }
 
-func GetWorkflowJobLogs(ctx *context.APIContext) {
-	// swagger:operation GET /repos/{owner}/{repo}/actions/runs/{run}/jobs/{job_id}/logs repository getWorkflowJobLogs
-	// ---
-	// summary: Download job logs
-	// produces:
-	// - application/zip
-	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repo
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
-	// - name: run
-	//   in: path
-	//   description: run ID or "latest"
-	//   type: string
-	//   required: true
-	// - name: job_id
-	//   in: path
-	//   description: id of the job
-	//   type: integer
-	//   required: true
-	// responses:
-	//   "200":
-	//     description: Job logs
-	//   "404":
-	//     "$ref": "#/responses/notFound"
-
-	runID, _, err := getRunID(ctx)
-	if err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Run not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-		return
-	}
-
-	jobID := ctx.PathParamInt64("job_id")
-
-	if err = common.DownloadActionsRunJobLogsWithIndex(ctx.Base, ctx.Repo.Repository, runID, jobID); err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Job logs not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-	}
-}
 
 func GetWorkflowRunLogsStream(ctx *context.APIContext) {
 	// swagger:operation POST /repos/{owner}/{repo}/actions/runs/{run}/logs repository getWorkflowRunLogsStream
