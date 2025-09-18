@@ -1256,7 +1256,7 @@ func Routes() *web.Router {
 					m.Get("/*", repo.GetBranch)
 					m.Delete("/*", reqToken(), reqRepoWriter(unit.TypeCode), mustNotBeArchived, repo.DeleteBranch)
 					m.Post("", reqToken(), reqRepoWriter(unit.TypeCode), mustNotBeArchived, bind(api.CreateBranchRepoOption{}), repo.CreateBranch)
-					m.Patch("/*", reqToken(), reqRepoWriter(unit.TypeCode), mustNotBeArchived, bind(api.UpdateBranchRepoOption{}), repo.UpdateBranch)
+					m.Patch("/*", reqToken(), reqRepoWriter(unit.TypeCode), mustNotBeArchived, bind(api.RenameBranchRepoOption{}), repo.RenameBranch)
 				}, context.ReferencesGitRepo(), reqRepoReader(unit.TypeCode))
 				m.Group("/branch_protections", func() {
 					m.Get("", repo.ListBranchProtections)
@@ -1293,10 +1293,7 @@ func Routes() *web.Router {
 							m.Post("/cancel", reqToken(), reqRepoWriter(unit.TypeActions), repo.CancelWorkflowRun)
 							m.Post("/approve", reqToken(), reqRepoWriter(unit.TypeActions), repo.ApproveWorkflowRun)
 							m.Get("/jobs", repo.ListWorkflowRunJobs)
-							m.Group("/jobs", func() {
-								m.Post("/{job_id}/rerun", reqToken(), reqRepoWriter(unit.TypeActions), repo.RerunWorkflowJob)
-								m.Get("/{job_id}/logs", repo.GetWorkflowJobLogs)
-							})
+							m.Post("/jobs/{job_id}/rerun", reqToken(), reqRepoWriter(unit.TypeActions), repo.RerunWorkflowJob)
 							m.Get("/logs", repo.GetWorkflowRunLogs)
 							m.Post("/logs", reqToken(), reqRepoReader(unit.TypeActions), repo.GetWorkflowRunLogsStream)
 							m.Get("/artifacts", repo.GetArtifactsOfRun)

@@ -93,7 +93,7 @@ func RerunWorkflowRun(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// responses:
@@ -111,13 +111,7 @@ func RerunWorkflowRun(ctx *context.APIContext) {
 		return
 	}
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
-		return
-	}
-
-	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
+	_, run, err := getRunID(ctx)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Run not found")
@@ -184,7 +178,7 @@ func CancelWorkflowRun(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// responses:
@@ -202,13 +196,17 @@ func CancelWorkflowRun(ctx *context.APIContext) {
 		return
 	}
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
+	runID, _, err := getRunID(ctx)
+	if err != nil {
+		if errors.Is(err, util.ErrNotExist) {
+			ctx.APIError(404, "Run not found")
+		} else {
+			ctx.APIErrorInternal(err)
+		}
 		return
 	}
 
-	jobs, err := getRunJobsByIndex(ctx, runIndex)
+	jobs, err := getRunJobsByRunID(ctx, runID)
 	if err != nil {
 		ctx.APIErrorInternal(err)
 		return
@@ -281,7 +279,7 @@ func ApproveWorkflowRun(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// responses:
@@ -299,13 +297,17 @@ func ApproveWorkflowRun(ctx *context.APIContext) {
 		return
 	}
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
+	runID, _, err := getRunID(ctx)
+	if err != nil {
+		if errors.Is(err, util.ErrNotExist) {
+			ctx.APIError(404, "Run not found")
+		} else {
+			ctx.APIErrorInternal(err)
+		}
 		return
 	}
 
-	current, jobs, err := getRunJobsAndCurrent(ctx, runIndex, -1)
+	current, jobs, err := getRunJobsAndCurrent(ctx, runID, -1)
 	if err != nil {
 		ctx.APIErrorInternal(err)
 		return
@@ -375,7 +377,7 @@ func RerunWorkflowJob(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// - name: job_id
@@ -398,16 +400,20 @@ func RerunWorkflowJob(ctx *context.APIContext) {
 		return
 	}
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
+	runID, _, err := getRunID(ctx)
+	if err != nil {
+		if errors.Is(err, util.ErrNotExist) {
+			ctx.APIError(404, "Run not found")
+		} else {
+			ctx.APIErrorInternal(err)
+		}
 		return
 	}
 
 	jobID := ctx.PathParamInt64("job_id")
 
 	// Get all jobs for the run to handle dependencies
-	allJobs, err := getRunJobsByIndex(ctx, runIndex)
+	allJobs, err := getRunJobsByRunID(ctx, runID)
 	if err != nil {
 		ctx.APIErrorInternal(err)
 		return
@@ -427,12 +433,8 @@ func RerunWorkflowJob(ctx *context.APIContext) {
 		return
 	}
 
-	// Get run and check if workflow is disabled
-	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
-	if err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
+	// Get run from the job and check if workflow is disabled
+	run := allJobs[0].Run
 
 	cfgUnit := ctx.Repo.Repository.MustGetUnit(ctx, unit.TypeActions)
 	cfg := cfgUnit.ActionsConfig()
@@ -468,20 +470,38 @@ func RerunWorkflowJob(ctx *context.APIContext) {
 }
 
 // Helper functions
-func getRunIndex(ctx *context.APIContext) int64 {
-	// if run param is "latest", get the latest run index
+func getRunID(ctx *context.APIContext) (int64, *actions_model.ActionRun, error) {
+	// if run param is "latest", get the latest run
 	if ctx.PathParam("run") == "latest" {
-		if run, _ := actions_model.GetLatestRun(ctx, ctx.Repo.Repository.ID); run != nil {
-			return run.Index
+		run, err := actions_model.GetLatestRun(ctx, ctx.Repo.Repository.ID)
+		if err != nil {
+			return 0, nil, err
 		}
+		if run == nil {
+			return 0, nil, util.ErrNotExist
+		}
+		return run.ID, run, nil
 	}
-	return ctx.PathParamInt64("run")
+
+	// Otherwise get run by ID
+	runID := ctx.PathParamInt64("run")
+	run, has, err := db.GetByID[actions_model.ActionRun](ctx, runID)
+	if err != nil {
+		return 0, nil, err
+	}
+	if !has || run.RepoID != ctx.Repo.Repository.ID {
+		return 0, nil, util.ErrNotExist
+	}
+	return runID, run, nil
 }
 
-func getRunJobsByIndex(ctx *context.APIContext, runIndex int64) ([]*actions_model.ActionRunJob, error) {
-	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
+func getRunJobsByRunID(ctx *context.APIContext, runID int64) ([]*actions_model.ActionRunJob, error) {
+	run, has, err := db.GetByID[actions_model.ActionRun](ctx, runID)
 	if err != nil {
 		return nil, err
+	}
+	if !has || run.RepoID != ctx.Repo.Repository.ID {
+		return nil, util.ErrNotExist
 	}
 	run.Repo = ctx.Repo.Repository
 	jobs, err := actions_model.GetRunJobsByRunID(ctx, run.ID)
@@ -494,8 +514,8 @@ func getRunJobsByIndex(ctx *context.APIContext, runIndex int64) ([]*actions_mode
 	return jobs, nil
 }
 
-func getRunJobsAndCurrent(ctx *context.APIContext, runIndex, jobIndex int64) (*actions_model.ActionRunJob, []*actions_model.ActionRunJob, error) {
-	jobs, err := getRunJobsByIndex(ctx, runIndex)
+func getRunJobsAndCurrent(ctx *context.APIContext, runID, jobIndex int64) (*actions_model.ActionRunJob, []*actions_model.ActionRunJob, error) {
+	jobs, err := getRunJobsByRunID(ctx, runID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -588,7 +608,7 @@ func GetWorkflowRunLogs(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// responses:
@@ -597,13 +617,7 @@ func GetWorkflowRunLogs(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
-		return
-	}
-
-	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
+	_, run, err := getRunID(ctx)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Run not found")
@@ -616,66 +630,6 @@ func GetWorkflowRunLogs(ctx *context.APIContext) {
 	if err = common.DownloadActionsRunJobLogsWithIndex(ctx.Base, ctx.Repo.Repository, run.ID, 0); err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Logs not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-	}
-}
-
-func GetWorkflowJobLogs(ctx *context.APIContext) {
-	// swagger:operation GET /repos/{owner}/{repo}/actions/runs/{run}/jobs/{job_id}/logs repository getWorkflowJobLogs
-	// ---
-	// summary: Download job logs
-	// produces:
-	// - application/zip
-	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repo
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
-	// - name: run
-	//   in: path
-	//   description: run number or "latest"
-	//   type: string
-	//   required: true
-	// - name: job_id
-	//   in: path
-	//   description: id of the job
-	//   type: integer
-	//   required: true
-	// responses:
-	//   "200":
-	//     description: Job logs
-	//   "404":
-	//     "$ref": "#/responses/notFound"
-
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
-		return
-	}
-
-	jobID := ctx.PathParamInt64("job_id")
-
-	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
-	if err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Run not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-		return
-	}
-
-	if err = common.DownloadActionsRunJobLogsWithIndex(ctx.Base, ctx.Repo.Repository, run.ID, jobID); err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Job logs not found")
 		} else {
 			ctx.APIErrorInternal(err)
 		}
@@ -703,7 +657,7 @@ func GetWorkflowRunLogsStream(ctx *context.APIContext) {
 	//   required: true
 	// - name: run
 	//   in: path
-	//   description: run number or "latest"
+	//   description: run ID or "latest"
 	//   type: string
 	//   required: true
 	// - name: job
@@ -758,9 +712,13 @@ func GetWorkflowRunLogsStream(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	runIndex := getRunIndex(ctx)
-	if runIndex == 0 {
-		ctx.APIError(404, "Invalid run number")
+	runID, _, err := getRunID(ctx)
+	if err != nil {
+		if errors.Is(err, util.ErrNotExist) {
+			ctx.APIError(404, "Run not found")
+		} else {
+			ctx.APIErrorInternal(err)
+		}
 		return
 	}
 
@@ -776,7 +734,7 @@ func GetWorkflowRunLogsStream(ctx *context.APIContext) {
 		req = LogRequest{LogCursors: []LogCursor{}}
 	}
 
-	current, _, err := getRunJobsAndCurrent(ctx, runIndex, jobIndex)
+	current, _, err := getRunJobsAndCurrent(ctx, runID, jobIndex)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Run or job not found")
