@@ -282,6 +282,7 @@ func TestAPIActionsGetWorkflowJobLogs(t *testing.T) {
 		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusNotFound)
 }
+
 func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	defer prepareTestEnvActionsArtifacts(t)()
 
