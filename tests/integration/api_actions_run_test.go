@@ -264,6 +264,7 @@ func TestAPIActionsGetWorkflowRunLogs(t *testing.T) {
 	MakeRequest(t, req, http.StatusNotFound)
 }
 
+
 func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	defer prepareTestEnvActionsArtifacts(t)()
 
