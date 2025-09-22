@@ -628,7 +628,7 @@ func GetWorkflowRunLogs(ctx *context.APIContext) {
 		return
 	}
 
-	if err = common.DownloadActionsRunJobLogsWithIndex(ctx.Base, ctx.Repo.Repository, run.ID, 0); err != nil {
+	if err = common.DownloadActionsRunAllJobLogs(ctx.Base, ctx.Repo.Repository, run.ID); err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Logs not found")
 		} else {
