@@ -264,6 +264,24 @@ func TestAPIActionsGetWorkflowRunLogs(t *testing.T) {
 	MakeRequest(t, req, http.StatusNotFound)
 }
 
+func TestAPIActionsGetWorkflowJobLogs(t *testing.T) {
+	defer prepareTestEnvActionsArtifacts(t)()
+
+	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 2})
+	user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: repo.OwnerID})
+	session := loginUser(t, user.Name)
+	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository)
+
+	// Test get job logs
+	req := NewRequest(t, "GET", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/jobs/192/logs", repo.FullName())).
+		AddTokenAuth(token)
+	MakeRequest(t, req, http.StatusOK)
+
+	// Test get non-existent job logs
+	req = NewRequest(t, "GET", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/jobs/999999/logs", repo.FullName())).
+		AddTokenAuth(token)
+	MakeRequest(t, req, http.StatusNotFound)
+}
 
 func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	defer prepareTestEnvActionsArtifacts(t)()
