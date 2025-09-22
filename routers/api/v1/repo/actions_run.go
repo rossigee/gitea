@@ -682,7 +682,23 @@ func GetWorkflowJobLogs(ctx *context.APIContext) {
 
 	jobID := ctx.PathParamInt64("job_id")
 
-	if err = common.DownloadActionsRunJobLogsWithIndex(ctx.Base, ctx.Repo.Repository, runID, jobID); err != nil {
+	// Get the job by ID and verify it belongs to the run
+	job, err := actions_model.GetRunJobByID(ctx, jobID)
+	if err != nil {
+		ctx.APIErrorInternal(err)
+		return
+	}
+	if job.RunID != runID {
+		ctx.APIError(404, "Job not found in this run")
+		return
+	}
+
+	if err = job.LoadRepo(ctx); err != nil {
+		ctx.APIErrorInternal(err)
+		return
+	}
+
+	if err = common.DownloadActionsRunJobLogs(ctx.Base, ctx.Repo.Repository, job); err != nil {
 		if errors.Is(err, util.ErrNotExist) {
 			ctx.APIError(404, "Job logs not found")
 		} else {
