@@ -62,45 +62,6 @@ func getServerURLForActions() string {
 	return setting.AppURL
 }
 
-// getServerURLForActions returns the server URL to use in Actions context.
-// If SSH_DOMAIN is configured differently from the main domain, this returns
-// a URL with the SSH domain to ensure checkout actions use the correct SSH hostname.
-func getServerURLForActions() string {
-	// Parse the main AppURL to get the scheme and port
-	appURL, err := url.Parse(setting.AppURL)
-	if err != nil {
-		log.Error("Failed to parse AppURL '%s': %v", setting.AppURL, err)
-		return setting.AppURL // fallback to original if parsing fails
-	}
-
-	// Get the main domain from AppURL
-	mainDomain := appURL.Hostname()
-
-	log.Info("SSH Domain Debug - AppURL: %s, MainDomain: %s, SSH.Domain: %s", setting.AppURL, mainDomain, setting.SSH.Domain)
-
-	// If SSH_DOMAIN is different from the main domain, use SSH_DOMAIN for the server URL
-	// This ensures that checkout actions will use the correct SSH hostname
-	if len(setting.SSH.Domain) > 0 && setting.SSH.Domain != mainDomain {
-		log.Info("SSH Domain differs from main domain, using SSH domain URL")
-		// Create a new URL with the SSH domain but keep the same scheme and port as AppURL
-		sshURL := &url.URL{
-			Scheme: appURL.Scheme,
-			Host:   setting.SSH.Domain,
-		}
-		if appURL.Port() != "" {
-			sshURL.Host = setting.SSH.Domain + ":" + appURL.Port()
-		}
-		sshURL.Path = strings.TrimSuffix(appURL.Path, "/") + "/"
-		result := sshURL.String()
-		log.Info("SSH Domain URL result: %s", result)
-		return result
-	}
-
-	log.Info("SSH Domain same as main domain or not configured, using AppURL: %s", setting.AppURL)
-	// If SSH_DOMAIN is not configured or is the same as main domain, use AppURL
-	return setting.AppURL
-}
-
 type GiteaContext map[string]any
 
 // GenerateGiteaContext generate the gitea context without token and gitea_runtime_token
