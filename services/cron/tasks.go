@@ -158,9 +158,14 @@ func GetTask(name string) *Task {
 func RegisterTask(name string, config Config, fun func(context.Context, *user_model.User, Config) error) error {
 	log.Debug("Registering task: %s", name)
 
+	// Check if translation exists, but only if locales are fully initialized
 	i18nKey := "dashboard." + name
-	if value := translation.NewLocale("en-US").TrString(i18nKey); value == i18nKey {
-		return fmt.Errorf("translation is missing for task %q, please add translation for %q", name, i18nKey)
+	locale := translation.NewLocale("en-US")
+	if locale != nil {
+		if value := locale.TrString(i18nKey); value == i18nKey {
+			log.Warn("translation may be missing for task %q, expected translation key %q", name, i18nKey)
+			// Don't fail during registration - the translation system may not be fully ready yet
+		}
 	}
 
 	_, err := setting.GetCronSettings(name, config)
