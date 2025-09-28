@@ -7,10 +7,12 @@ package json
 
 import (
 	"io"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 func getDefaultJSONHandler() Interface {
-	return jsonGoccy{}
+	return JSONiter{jsoniter.ConfigCompatibleWithStandardLibrary}
 }
 
 func MarshalKeepOptionalEmpty(v any) ([]byte, error) {
