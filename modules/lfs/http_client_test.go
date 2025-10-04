@@ -193,7 +193,7 @@ func TestHTTPClientDownload(t *testing.T) {
 		},
 		{
 			endpoint:      "https://invalid-json-response.io",
-			expectedError: "/(invalid json|invalid character)/",
+			expectedError: "/(invalid json|jsontext: invalid character)/",
 		},
 		{
 			endpoint:      "https://valid-batch-request-download.io",
@@ -301,7 +301,7 @@ func TestHTTPClientUpload(t *testing.T) {
 		},
 		{
 			endpoint:      "https://invalid-json-response.io",
-			expectedError: "/(invalid json|invalid character)/",
+			expectedError: "/(invalid json|jsontext: invalid character)/",
 		},
 		{
 			endpoint:      "https://valid-batch-request-upload.io",
