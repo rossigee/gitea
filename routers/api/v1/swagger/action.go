@@ -58,5 +58,5 @@ type swaggerWorkflowRunRerunRequest struct {
 // swagger:model WorkflowRunLogsRequest
 type swaggerWorkflowRunLogsRequest struct {
 	// Log cursors for incremental log streaming
-	LogCursors []map[string]interface{} `json:"logCursors"`
+	LogCursors []map[string]any `json:"logCursors"`
 }
