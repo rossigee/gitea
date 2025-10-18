@@ -245,7 +245,7 @@ func CancelWorkflowRun(ctx *context.APIContext) {
 		return
 	}
 
-	actions_service.CreateCommitStatus(ctx, jobs...)
+	actions_service.CreateCommitStatusForRunJobs(ctx, jobs[0].Run, jobs...)
 
 	for _, job := range updatedJobs {
 		_ = job.LoadAttributes(ctx)
@@ -342,7 +342,7 @@ func ApproveWorkflowRun(ctx *context.APIContext) {
 		return
 	}
 
-	actions_service.CreateCommitStatus(ctx, jobs...)
+	actions_service.CreateCommitStatusForRunJobs(ctx, jobs[0].Run, jobs...)
 
 	if len(updatedJobs) > 0 {
 		job := updatedJobs[0]
@@ -550,7 +550,7 @@ func rerunJob(ctx *context.APIContext, job *actions_model.ActionRunJob, shouldBl
 		return err
 	}
 
-	actions_service.CreateCommitStatus(ctx, job)
+	actions_service.CreateCommitStatusForRunJobs(ctx, job.Run, job)
 	actions_service.NotifyWorkflowRunStatusUpdateWithReload(ctx, job)
 	notify_service.WorkflowJobStatusUpdate(ctx, job.Run.Repo, job.Run.TriggerUser, job, nil)
 

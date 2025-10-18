@@ -9,12 +9,6 @@ import (
 	"code.gitea.io/gitea/modules/git/gitcmd"
 )
 
-<<<<<<< HEAD
-func runCmdString(ctx context.Context, repo Repository, cmd *gitcmd.Command) (string, error) {
-	res, _, err := cmd.RunStdString(ctx, &gitcmd.RunOpts{Dir: repoPath(repo)})
-	return res, err
-}
-=======
 func RunCmd(ctx context.Context, repo Repository, cmd *gitcmd.Command) error {
 	return cmd.WithDir(repoPath(repo)).WithParentCallerInfo().Run(ctx)
 }
@@ -27,4 +21,3 @@ func RunCmdString(ctx context.Context, repo Repository, cmd *gitcmd.Command) (st
 func RunCmdBytes(ctx context.Context, repo Repository, cmd *gitcmd.Command) ([]byte, []byte, error) {
 	return cmd.WithDir(repoPath(repo)).WithParentCallerInfo().RunStdBytes(ctx)
 }
->>>>>>> main
