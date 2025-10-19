@@ -272,12 +272,10 @@ func TestAPIActionsGetWorkflowJobLogs(t *testing.T) {
 	session := loginUser(t, user.Name)
 	token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteRepository)
 
-	// Test get job logs
 	req := NewRequest(t, "GET", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/jobs/198/logs", repo.FullName())).
 		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusOK)
 
-	// Test get non-existent job logs
 	req = NewRequest(t, "GET", fmt.Sprintf("/api/v1/repos/%s/actions/runs/795/jobs/999999/logs", repo.FullName())).
 		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusNotFound)
