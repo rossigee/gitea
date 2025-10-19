@@ -545,7 +545,7 @@ func rerunJob(ctx *context.APIContext, job *actions_model.ActionRunJob, shouldBl
 	job.Stopped = 0
 
 	if err := db.WithTx(ctx, func(ctx stdCtx.Context) error {
-		_, err := actions_model.UpdateRunJob(ctx, job, builder.Eq{"status": status}, "task_id", "status", "started", "stopped")
+		_, err := actions_model.UpdateRunJob(ctx, job, nil, "task_id", "status", "started", "stopped")
 		return err
 	}); err != nil {
 		return err
