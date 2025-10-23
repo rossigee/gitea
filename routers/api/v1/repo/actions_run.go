@@ -495,8 +495,6 @@ func getRunJobsAndCurrent(ctx *context.APIContext, runID, jobIndex int64) (*acti
 	return jobs[0], jobs, nil
 }
 
-
-
 // LogCursor represents a log cursor position
 type LogCursor struct {
 	Step     int   `json:"step"`
