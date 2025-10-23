@@ -297,7 +297,7 @@ func TestAPIActionsGetWorkflowRunLogsStream(t *testing.T) {
 	resp := MakeRequest(t, req, http.StatusOK)
 
 	// Parse response to verify structure
-	var logResp map[string]interface{}
+	var logResp map[string]any
 	err := json.Unmarshal(resp.Body.Bytes(), &logResp)
 	assert.NoError(t, err)
 	assert.Contains(t, logResp, "stepsLog")
