@@ -111,11 +111,6 @@ func RerunWorkflowRun(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	if !ctx.Repo.CanWrite(unit.TypeActions) {
-		ctx.APIError(403, "User does not have write access to actions")
-		return
-	}
-
 	_, run, err := getRunID(ctx)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
@@ -195,11 +190,6 @@ func CancelWorkflowRun(ctx *context.APIContext) {
 	//     "$ref": "#/responses/forbidden"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
-
-	if !ctx.Repo.CanWrite(unit.TypeActions) {
-		ctx.APIError(403, "User does not have write access to actions")
-		return
-	}
 
 	runID, _, err := getRunID(ctx)
 	if err != nil {
@@ -296,11 +286,6 @@ func ApproveWorkflowRun(ctx *context.APIContext) {
 	//     "$ref": "#/responses/forbidden"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
-
-	if !ctx.Repo.CanWrite(unit.TypeActions) {
-		ctx.APIError(403, "User does not have write access to actions")
-		return
-	}
 
 	runID, _, err := getRunID(ctx)
 	if err != nil {
@@ -399,11 +384,6 @@ func RerunWorkflowJob(ctx *context.APIContext) {
 	//     "$ref": "#/responses/forbidden"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
-
-	if !ctx.Repo.CanWrite(unit.TypeActions) {
-		ctx.APIError(403, "User does not have write access to actions")
-		return
-	}
 
 	runID, _, err := getRunID(ctx)
 	if err != nil {
