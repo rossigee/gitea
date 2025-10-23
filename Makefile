@@ -269,7 +269,7 @@ fmt: ## format the Go and template code
 
 .PHONY: fmt-check
 fmt-check: fmt
-	@diff=$$(git diff --color=always $(GO_SOURCES) templates); \
+	@diff=$$(git diff --color=always $(GO_SOURCES) templates $(WEB_DIRS)); \
 	if [ -n "$$diff" ]; then \
 	  echo "Please run 'make fmt' and commit the result:"; \
 	  printf "%s" "$${diff}"; \
@@ -419,7 +419,7 @@ lint-actions: ## lint action workflow files
 
 .PHONY: lint-templates
 lint-templates: .venv node_modules ## lint template files
-	@$(NODE_VARS) node tools/lint-templates-svg.ts
+	@node tools/lint-templates-svg.ts
 	@uv run --frozen djlint $(shell find templates -type f -iname '*.tmpl')
 
 .PHONY: lint-yaml
@@ -895,7 +895,7 @@ $(WEBPACK_DEST): $(WEBPACK_SOURCES) $(WEBPACK_CONFIGS) pnpm-lock.yaml
 .PHONY: svg
 svg: node-check | node_modules ## build svg files
 	rm -rf $(SVG_DEST_DIR)
-	$(NODE_VARS) node tools/generate-svg.ts
+	node tools/generate-svg.ts
 
 .PHONY: svg-check
 svg-check: svg
@@ -934,7 +934,7 @@ generate-gitignore: ## update gitignore files
 
 .PHONY: generate-images
 generate-images: | node_modules ## generate images
-	cd tools && $(NODE_VARS) node generate-images.ts $(TAGS)
+	cd tools && node generate-images.ts $(TAGS)
 
 .PHONY: generate-manpage
 generate-manpage: ## generate manpage
