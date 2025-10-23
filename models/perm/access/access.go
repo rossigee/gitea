@@ -33,6 +33,26 @@ func init() {
 	db.RegisterModel(new(Access))
 }
 
+type accessFindOptions struct {
+	Cond builder.Cond
+}
+
+func (o accessFindOptions) GetPage() int {
+	return 1
+}
+
+func (o accessFindOptions) GetPageSize() int {
+	return 0
+}
+
+func (o accessFindOptions) IsListAll() bool {
+	return true
+}
+
+func (o accessFindOptions) ToConds() builder.Cond {
+	return o.Cond
+}
+
 func accessLevel(ctx context.Context, user *user_model.User, repo *repo_model.Repository) (perm.AccessMode, error) {
 	mode := perm.AccessModeNone
 	var userID int64
@@ -91,7 +111,6 @@ func updateUserAccess(accessMap map[int64]*userAccess, user *user_model.User, mo
 	}
 }
 
-// FIXME: do cross-comparison so reduce deletions and additions to the minimum?
 func refreshAccesses(ctx context.Context, repo *repo_model.Repository, accessMap map[int64]*userAccess) (err error) {
 	minMode := perm.AccessModeRead
 	if err := repo.LoadOwner(ctx); err != nil {
@@ -104,30 +123,76 @@ func refreshAccesses(ctx context.Context, repo *repo_model.Repository, accessMap
 		minMode = perm.AccessModeWrite
 	}
 
-	newAccesses := make([]Access, 0, len(accessMap))
+	// Query existing accesses for cross-comparison
+	existingAccesses, err := db.Find[Access](ctx, accessFindOptions{Cond: builder.Eq{"repo_id": repo.ID}})
+	if err != nil {
+		return fmt.Errorf("find existing accesses: %w", err)
+	}
+	existingMap := make(map[int64]perm.AccessMode, len(existingAccesses))
+	for _, a := range existingAccesses {
+		existingMap[a.UserID] = a.Mode
+	}
+
+	var toDelete []int64
+	var toInsert []Access
+	var toUpdate []struct {
+		UserID int64
+		Mode   perm.AccessMode
+	}
+
+	// Determine changes
 	for userID, ua := range accessMap {
 		if ua.Mode < minMode && !ua.User.IsRestricted {
-			continue
+			// Should not have access
+			if _, exists := existingMap[userID]; exists {
+				toDelete = append(toDelete, userID)
+			}
+		} else {
+			desiredMode := ua.Mode
+			if existingMode, exists := existingMap[userID]; exists {
+				if existingMode != desiredMode {
+					toUpdate = append(toUpdate, struct {
+						UserID int64
+						Mode   perm.AccessMode
+					}{UserID: userID, Mode: desiredMode})
+				}
+			} else {
+				toInsert = append(toInsert, Access{
+					UserID: userID,
+					RepoID: repo.ID,
+					Mode:   desiredMode,
+				})
+			}
 		}
-
-		newAccesses = append(newAccesses, Access{
-			UserID: userID,
-			RepoID: repo.ID,
-			Mode:   ua.Mode,
-		})
+		delete(existingMap, userID)
 	}
 
-	// Delete old accesses and insert new ones for repository.
-	if _, err = db.DeleteByBean(ctx, &Access{RepoID: repo.ID}); err != nil {
-		return fmt.Errorf("delete old accesses: %w", err)
-	}
-	if len(newAccesses) == 0 {
-		return nil
+	// Remaining in existingMap should be deleted
+	for userID := range existingMap {
+		toDelete = append(toDelete, userID)
 	}
 
-	if err = db.Insert(ctx, newAccesses); err != nil {
-		return fmt.Errorf("insert new accesses: %w", err)
+	// Execute deletions
+	if len(toDelete) > 0 {
+		if _, err = db.GetEngine(ctx).In("user_id", toDelete).And("repo_id = ?", repo.ID).Delete(&Access{}); err != nil {
+			return fmt.Errorf("delete accesses: %w", err)
+		}
 	}
+
+	// Execute updates
+	for _, u := range toUpdate {
+		if _, err = db.GetEngine(ctx).Where("user_id = ? AND repo_id = ?", u.UserID, repo.ID).Cols("mode").Update(&Access{Mode: u.Mode}); err != nil {
+			return fmt.Errorf("update access for user %d: %w", u.UserID, err)
+		}
+	}
+
+	// Execute insertions
+	if len(toInsert) > 0 {
+		if err = db.Insert(ctx, toInsert); err != nil {
+			return fmt.Errorf("insert new accesses: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -194,10 +259,7 @@ func RecalculateTeamAccesses(ctx context.Context, repo *repo_model.Repository, i
 // RecalculateUserAccess recalculates new access for a single user
 // Usable if we know access only affected one user
 func RecalculateUserAccess(ctx context.Context, repo *repo_model.Repository, uid int64) (err error) {
-	minMode := perm.AccessModeRead
-	if !repo.IsPrivate {
-		minMode = perm.AccessModeWrite
-	}
+	minMode := perm.AccessModeNone
 
 	accessMode := perm.AccessModeNone
 	e := db.GetEngine(ctx)
