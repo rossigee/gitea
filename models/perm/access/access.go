@@ -33,6 +33,26 @@ func init() {
 	db.RegisterModel(new(Access))
 }
 
+type accessFindOptions struct {
+	Cond builder.Cond
+}
+
+func (o accessFindOptions) GetPage() int {
+	return 1
+}
+
+func (o accessFindOptions) GetPageSize() int {
+	return 0
+}
+
+func (o accessFindOptions) IsListAll() bool {
+	return true
+}
+
+func (o accessFindOptions) ToConds() builder.Cond {
+	return o.Cond
+}
+
 func accessLevel(ctx context.Context, user *user_model.User, repo *repo_model.Repository) (perm.AccessMode, error) {
 	mode := perm.AccessModeNone
 	var userID int64
@@ -104,7 +124,7 @@ func refreshAccesses(ctx context.Context, repo *repo_model.Repository, accessMap
 	}
 
 	// Query existing accesses for cross-comparison
-	existingAccesses, err := db.Find[Access](ctx, builder.Eq{"repo_id": repo.ID})
+	existingAccesses, err := db.Find[Access](ctx, accessFindOptions{Cond: builder.Eq{"repo_id": repo.ID}})
 	if err != nil {
 		return fmt.Errorf("find existing accesses: %w", err)
 	}
