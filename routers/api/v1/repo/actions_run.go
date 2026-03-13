@@ -11,7 +11,6 @@ import (
 
 	actions_model "code.gitea.io/gitea/models/actions"
 	"code.gitea.io/gitea/models/db"
-	"code.gitea.io/gitea/models/unit"
 	"code.gitea.io/gitea/modules/actions"
 	"code.gitea.io/gitea/modules/json"
 	"code.gitea.io/gitea/modules/timeutil"
@@ -77,87 +76,6 @@ func DownloadActionsRunJobLogs(ctx *context.APIContext) {
 			ctx.APIErrorInternal(err)
 		}
 	}
-}
-
-func RerunWorkflowRun(ctx *context.APIContext) {
-	// swagger:operation POST /repos/{owner}/{repo}/actions/runs/{run}/rerun repository rerunWorkflowRun
-	// ---
-	// summary: Rerun a workflow run and its jobs
-	// produces:
-	// - application/json
-	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repo
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
-	// - name: run
-	//   in: path
-	//   description: run ID
-	//   type: integer
-	//   required: true
-	// responses:
-	//   "200":
-	//     description: success
-	//   "400":
-	//     "$ref": "#/responses/error"
-	//   "403":
-	//     "$ref": "#/responses/forbidden"
-	//   "404":
-	//     "$ref": "#/responses/notFound"
-
-	_, run, err := getRunID(ctx)
-	if err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Run not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-		return
-	}
-
-	// Check if workflow is disabled
-	cfgUnit := ctx.Repo.Repository.MustGetUnit(ctx, unit.TypeActions)
-	cfg := cfgUnit.ActionsConfig()
-	if cfg.IsWorkflowDisabled(run.WorkflowID) {
-		ctx.APIError(400, "Workflow is disabled")
-		return
-	}
-
-	// Reset run's start and stop time when it is done
-	if err := actions_service.ResetRunTimes(ctx, run); err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
-
-	jobs, err := actions_model.GetRunJobsByRunID(ctx, run.ID)
-	if err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
-
-	// Rerun all jobs
-	for _, job := range jobs {
-		if err := job.LoadRun(ctx); err != nil {
-			ctx.APIErrorInternal(err)
-			return
-		}
-		// If the job has needs, it should be set to "blocked" status to wait for other jobs
-		shouldBlock := len(job.Needs) > 0
-		if err := actions_service.RerunJob(ctx, job, shouldBlock); err != nil {
-			ctx.APIErrorInternal(err)
-			return
-		}
-		actions_service.NotifyWorkflowRunStatusUpdateWithReload(ctx, job)
-		notify_service.WorkflowJobStatusUpdate(ctx, job.Run.Repo, job.Run.TriggerUser, job, nil)
-	}
-
-	ctx.Status(200)
 }
 
 func CancelWorkflowRun(ctx *context.APIContext) {
@@ -349,109 +267,6 @@ func ApproveWorkflowRun(ctx *context.APIContext) {
 	ctx.Status(200)
 }
 
-func RerunWorkflowJob(ctx *context.APIContext) {
-	// swagger:operation POST /repos/{owner}/{repo}/actions/runs/{run}/jobs/{job_id}/rerun repository rerunWorkflowJob
-	// ---
-	// summary: Rerun a specific job and its dependent jobs
-	// produces:
-	// - application/json
-	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repo
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
-	// - name: run
-	//   in: path
-	//   description: run ID
-	//   type: integer
-	//   required: true
-	// - name: job_id
-	//   in: path
-	//   description: id of the job
-	//   type: integer
-	//   required: true
-	// responses:
-	//   "200":
-	//     description: success
-	//   "400":
-	//     "$ref": "#/responses/error"
-	//   "403":
-	//     "$ref": "#/responses/forbidden"
-	//   "404":
-	//     "$ref": "#/responses/notFound"
-
-	runID, _, err := getRunID(ctx)
-	if err != nil {
-		if errors.Is(err, util.ErrNotExist) {
-			ctx.APIError(404, "Run not found")
-		} else {
-			ctx.APIErrorInternal(err)
-		}
-		return
-	}
-
-	jobID := ctx.PathParamInt64("job_id")
-
-	// Get all jobs for the run to handle dependencies
-	allJobs, err := getRunJobsByRunID(ctx, runID)
-	if err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
-
-	// Find the specific job in the list
-	var job *actions_model.ActionRunJob
-	for _, j := range allJobs {
-		if j.ID == jobID {
-			job = j
-			break
-		}
-	}
-
-	if job == nil {
-		ctx.APIError(404, "Job not found in run")
-		return
-	}
-
-	// Get run from the job and check if workflow is disabled
-	run := allJobs[0].Run
-
-	cfgUnit := ctx.Repo.Repository.MustGetUnit(ctx, unit.TypeActions)
-	cfg := cfgUnit.ActionsConfig()
-	if cfg.IsWorkflowDisabled(run.WorkflowID) {
-		ctx.APIError(400, "Workflow is disabled")
-		return
-	}
-
-	// Reset run's start and stop time when it is done
-	if err := actions_service.ResetRunTimes(ctx, run); err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
-
-	// Get all jobs that need to be rerun (including dependencies)
-	rerunJobs := actions_service.GetAllRerunJobs(job, allJobs)
-
-	for _, j := range rerunJobs {
-		// Jobs other than the specified one should be set to "blocked" status
-		shouldBlock := j.JobID != job.JobID
-		if err := actions_service.RerunJob(ctx, j, shouldBlock); err != nil {
-			ctx.APIErrorInternal(err)
-			return
-		}
-		actions_service.NotifyWorkflowRunStatusUpdateWithReload(ctx, j)
-		notify_service.WorkflowJobStatusUpdate(ctx, j.Run.Repo, j.Run.TriggerUser, j, nil)
-	}
-
-	ctx.Status(200)
-}
-
 // Helper functions
 func getRunID(ctx *context.APIContext) (int64, *actions_model.ActionRun, error) {
 	runID := ctx.PathParamInt64("run")
@@ -624,13 +439,13 @@ func GetWorkflowJobLogs(ctx *context.APIContext) {
 	jobID := ctx.PathParamInt64("job_id")
 
 	// Get the job by ID and verify it belongs to the run
-	job, err := actions_model.GetRunJobByID(ctx, jobID)
+	job, err := actions_model.GetRunJobByRunAndID(ctx, runID, jobID)
 	if err != nil {
-		ctx.APIErrorInternal(err)
-		return
-	}
-	if job.RunID != runID {
-		ctx.APIError(404, "Job not found in this run")
+		if errors.Is(err, util.ErrNotExist) {
+			ctx.APIError(404, "Job not found in this run")
+		} else {
+			ctx.APIErrorInternal(err)
+		}
 		return
 	}
 
