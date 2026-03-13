@@ -7,6 +7,7 @@ import (
 	stdCtx "context"
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	actions_model "code.gitea.io/gitea/models/actions"
@@ -455,7 +456,7 @@ func GetWorkflowJobLogs(ctx *context.APIContext) {
 	}
 
 	if err = common.DownloadActionsRunJobLogs(ctx.Base, ctx.Repo.Repository, job); err != nil {
-		if errors.Is(err, util.ErrNotExist) {
+		if errors.Is(err, util.ErrNotExist) || errors.Is(err, os.ErrNotExist) {
 			ctx.APIError(404, "Job logs not found")
 		} else {
 			ctx.APIErrorInternal(err)
