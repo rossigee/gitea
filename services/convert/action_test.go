@@ -4,6 +4,7 @@
 package convert
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -186,4 +187,56 @@ func TestToActionsStatus_Cancelling(t *testing.T) {
 
 func TestToWorkflowRunAction_Cancelling(t *testing.T) {
 	assert.Equal(t, "in_progress", ToWorkflowRunAction(actions_model.StatusCancelling))
+}
+
+func TestGetActionWorkflow_StateFromDisabled(t *testing.T) {
+	ctx := t.Context()
+
+	repoDir := buildWorkflowTestRepo(t)
+
+	gitRepo, err := git.OpenRepositoryLocal(ctx, repoDir)
+	require.NoError(t, err)
+	defer gitRepo.Close()
+
+	baseRepo := &repo_model.Repository{
+		DefaultBranch: "main",
+		OwnerName:     "test-owner",
+		Name:          "test-repo",
+		Units: []*repo_model.RepoUnit{{
+			Type:   unit.TypeActions,
+			Config: &repo_model.ActionsConfig{},
+		}},
+	}
+
+	t.Run("state active when not disabled", func(t *testing.T) {
+		wf, err := GetActionWorkflowByRef(ctx, gitRepo, baseRepo, "my-workflow.yml", git.RefName("refs/heads/feature"))
+		require.NoError(t, err)
+		assert.Equal(t, "active", wf.State)
+
+		bs, err := json.Marshal(wf)
+		require.NoError(t, err)
+		assert.Contains(t, string(bs), `"state":"active"`)
+		assert.NotContains(t, string(bs), `"active":`)
+	})
+
+	t.Run("state disabled_manually when disabled", func(t *testing.T) {
+		disabledRepo := &repo_model.Repository{
+			DefaultBranch: "main",
+			OwnerName:     "test-owner",
+			Name:          "test-repo",
+			Units: []*repo_model.RepoUnit{{
+				Type: unit.TypeActions,
+				Config: &repo_model.ActionsConfig{
+					DisabledWorkflows: []string{"my-workflow.yml"},
+				},
+			}},
+		}
+		wf, err := GetActionWorkflowByRef(ctx, gitRepo, disabledRepo, "my-workflow.yml", git.RefName("refs/heads/feature"))
+		require.NoError(t, err)
+		assert.Equal(t, "disabled_manually", wf.State)
+
+		bs, err := json.Marshal(wf)
+		require.NoError(t, err)
+		assert.Contains(t, string(bs), `"state":"disabled_manually"`)
+	})
 }
