@@ -49,3 +49,32 @@ func TestActionsConfig_ScopedWorkflowSerialization(t *testing.T) {
 	assert.True(t, got.IsScopedWorkflowDisabled(100, "ci.yml"))
 	assert.True(t, got.IsWorkflowDisabled("repo.yml"))
 }
+
+func TestActionsConfig_WorkflowDisabledState(t *testing.T) {
+	cfg := &ActionsConfig{}
+	assert.False(t, cfg.IsWorkflowDisabled("build-odoo.yaml"))
+
+	cfg.DisableWorkflow("build-odoo.yaml")
+	assert.True(t, cfg.IsWorkflowDisabled("build-odoo.yaml"))
+
+	cfg.EnableWorkflow("build-odoo.yaml")
+	assert.False(t, cfg.IsWorkflowDisabled("build-odoo.yaml"))
+	assert.Empty(t, cfg.DisabledWorkflows)
+
+	// idempotent enable/disable
+	cfg.DisableWorkflow("build-odoo.yaml")
+	cfg.DisableWorkflow("build-odoo.yaml")
+	assert.Len(t, cfg.DisabledWorkflows, 1)
+
+	cfg.EnableWorkflow("build-odoo.yaml")
+	cfg.EnableWorkflow("build-odoo.yaml")
+	assert.Empty(t, cfg.DisabledWorkflows)
+
+	// roundtrip serialization
+	cfg.DisableWorkflow("build-odoo.yaml")
+	bs, err := cfg.ToDB()
+	require.NoError(t, err)
+	got := &ActionsConfig{}
+	require.NoError(t, got.FromDB(bs))
+	assert.True(t, got.IsWorkflowDisabled("build-odoo.yaml"))
+}
